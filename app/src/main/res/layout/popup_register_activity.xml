@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="250dp"
+    android:layout_height="150dp"
+    android:layout_gravity="center"
+    android:background="@drawable/popup_register_background">
+
+    <TextView
+        android:id="@+id/textError"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:gravity="center"
+        android:layout_centerVertical="true"
+        android:layout_centerHorizontal="true"
+        android:text="Vos noms de joueur ne peuvent pas être vides ou identiques, merci de rééssayer !"
+        android:textSize="20dp"
+        android:textStyle="italic" />
+
+</RelativeLayout>
