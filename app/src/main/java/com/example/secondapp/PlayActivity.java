@@ -2,44 +2,42 @@ package com.example.secondapp;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.vectordrawable.graphics.drawable.AnimatedVectorDrawableCompat;
 
 import android.app.Dialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Color;
-import android.graphics.drawable.AnimatedVectorDrawable;
 import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 
+import android.os.CountDownTimer;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.squareup.picasso.Picasso;
 
-import org.w3c.dom.Text;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import static java.lang.Math.floor;
 
 public class PlayActivity extends AppCompatActivity {
 
 
     //Variables utilisees
-    TextView textId,textQuestion,textReponse1,textReponse2,textReponse3,textReponse4,textCorrect,textCurrentPlayer,textRepJoueur;
+    TextView textId,textTimer,textQuestion,textReponse1,textReponse2,textReponse3,textReponse4,textCorrect,textCurrentPlayer,textRepJoueur;
     DataBaseHelper db;
     Button valider;
-    ImageView imageQuestion,crossImg, doneImg;
+    ImageView imageQuestion;
     CheckBox isMedia;
-    Drawable drawable1,drawable2;
-    AnimatedVectorDrawable avd1,avd2;
-    AnimatedVectorDrawableCompat avdc1,avdc2;
     Dialog mGood,mBad;
+    ProgressBar progressBarTimer;
+    CountDownTimer myCount;
 
-    int reponseJoueur, lastDbId, nbJoueur, joueurActuel;
+    int reponseJoueur, lastDbId, nbJoueur, joueurActuel, counter;
     List<String> saveNames;
 
 
@@ -48,20 +46,24 @@ public class PlayActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_play);
 
+        //Création des fenêtres pop up
         mGood = new Dialog(this);
         mGood.setContentView(R.layout.popup_play_good_activity);
         mBad = new Dialog(this);
         mBad.setContentView(R.layout.popup_play_bad_activity);
 
-        doneImg = findViewById(R.id.doneImg);
-        crossImg = findViewById(R.id.crossImg);
+        counter = 15;
 
+        progressBarTimer = findViewById(R.id.progressBarTimer);
+
+        //Chargement des données des autres activités
         Intent intent = getIntent();
         nbJoueur = intent.getIntExtra("nombre_joueur",0);
         saveNames = intent.getStringArrayListExtra("liste_noms_joueurs");
 
-        joueurActuel= 1;
         reponseJoueur = 0;
+
+        joueurActuel = 1;
 
         List<Integer> dejaTire = new ArrayList<>();  //Initialisation de la liste des elements tires
 
@@ -78,6 +80,26 @@ public class PlayActivity extends AppCompatActivity {
         imageQuestion = findViewById(R.id.imageQuestion);
         isMedia = findViewById(R.id.checkBox);
         valider = findViewById(R.id.viewBtn);
+        textTimer = findViewById(R.id.timer);
+
+        counter = 15;
+        progressBarTimer.setMax(15);
+        progressBarTimer.setProgress(counter);
+
+        myCount = new CountDownTimer(15000,1000){
+            public void onTick (long millisUntilFinished){
+                textTimer.setText(String.valueOf(counter));
+                counter--;
+                progressBarTimer.setProgress(15-counter,true);
+            }
+
+            @Override
+            public void onFinish() {
+                valider.callOnClick();
+                progressBarTimer.setProgress(15);
+            }
+        }.start();
+
 
         db = new DataBaseHelper(this);
 
@@ -87,42 +109,79 @@ public class PlayActivity extends AppCompatActivity {
         //Enregistrement de la taille de la base de donnees
         cursor.moveToLast();
 
+        //Enregistrement de la taille de la db
         lastDbId = cursor.getPosition();
 
 
+        //Verification que la base de donnee n'est pas vide
+        if (cursor.getCount() == 0) {
+            Toast.makeText(getApplicationContext(), "NO DATA", Toast.LENGTH_SHORT).show();
+
+        } else {
+
+            //Tirage d'un premier random
+            cursor.moveToPosition(GenRandom(0, lastDbId));
+            //Verification que tous les elements de la base de donnee n'ont pas deja ete tire
+            if (dejaTire.size() == lastDbId) {
+                Toast.makeText(PlayActivity.this, "Base de donnée finie. Réinitialisation ", Toast.LENGTH_SHORT).show();
+                //(new Handler()).postDelayed(this::switchActivities, 2000);  //mise en pause de 2s avant retour main activity
+                dejaTire.clear();
+            } else {
+                while (dejaTire.contains(cursor.getPosition())) {   //Retirage en boucle si element tire lors du premier rand deja tire jusqu'a element jamais tire
+                    cursor.moveToPosition(GenRandom(0, lastDbId));
+                }
+            }
+
+            dejaTire.add(cursor.getPosition()); //Ajout de l'element tire a la liste des elements deja tire
+
+            if (cursor.getString(7).equals("1")) {  //Verification de si la question contient un media
+                String imageUrl = cursor.getString(8);
+                Picasso.get().load(imageUrl).into(imageQuestion);   //Chargement du media a partir du module picasso via url dans base de donnees
+                isMedia.setChecked(true);
+            } else {
+                isMedia.setChecked(false);
+                imageQuestion.setImageResource(R.drawable.questionmarkk);
+            }
+
+            //Affichage des question en reponses possible de l'id tire depuis la base de donnees
+            textId.setText("Id : " + cursor.getString(0));
+            textQuestion.setText("Question : " + cursor.getString(1));
+            textReponse1.setText("Reponse 1 : " + cursor.getString(2));
+            textReponse2.setText("Reponse 2 : " + cursor.getString(3));
+            textReponse3.setText("Reponse 3 : " + cursor.getString(4));
+            textReponse4.setText("Reponse 4 : " + cursor.getString(5));
+            textCorrect.setText("Correct : " + cursor.getString(6));
+
+        }
+
+        //Mise en surbrillance de la réponse du joueur
         highlightSelectedAnswer(textReponse1, 1);
         highlightSelectedAnswer(textReponse2, 2);
         highlightSelectedAnswer(textReponse3, 3);
         highlightSelectedAnswer(textReponse4, 4);
 
+        //Actualisation du nom du joueur actuel
+        textCurrentPlayer.setText(saveNames.get(joueurActuel-1));
+        //joueurActuel = joueurActuel == nbJoueur ? 1 : joueurActuel++;
+        if (joueurActuel==nbJoueur) {
+            joueurActuel = 1;
+        } else {
+            joueurActuel += 1;
+        }
 
         valider.setOnClickListener(v -> {   //Deroulement des actions suite au click sur bouton valider
 
+
+            myCount.cancel();
+
             if (reponseJoueur!=0){
                 if (cursor.getInt(6)==reponseJoueur){
-                    //Toast.makeText(PlayActivity.this, " Bonne Réponse", Toast.LENGTH_SHORT).show();
-                    drawable1 = doneImg.getDrawable();
-
-                    if (drawable1 instanceof AnimatedVectorDrawableCompat) {
-                        avdc1 = (AnimatedVectorDrawableCompat) drawable1;
-                        avdc1.start();
-                    } else if (drawable1 instanceof AnimatedVectorDrawable) {
-                        avd1 = (AnimatedVectorDrawable) drawable1;
-                        avd1.start();
-                    }
+                    Toast.makeText(PlayActivity.this, " Bonne Réponse", Toast.LENGTH_SHORT).show();
                     mGood.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                     mGood.show();
                 } else {
-                    //Toast.makeText(PlayActivity.this, " Mauvaise Réponse", Toast.LENGTH_SHORT).show();
-                    drawable2 = crossImg.getDrawable();
+                    Toast.makeText(PlayActivity.this, " Mauvaise Réponse", Toast.LENGTH_SHORT).show();
 
-                    if (drawable2 instanceof AnimatedVectorDrawableCompat) {
-                        avdc2 = (AnimatedVectorDrawableCompat) drawable2;
-                        avdc2.start();
-                    } else if (drawable2 instanceof AnimatedVectorDrawable) {
-                        avd2 = (AnimatedVectorDrawable) drawable2;
-                        avd2.start();
-                    }
                     mBad.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
                     mBad.show();
                 }
@@ -135,8 +194,6 @@ public class PlayActivity extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(), "NO DATA", Toast.LENGTH_SHORT).show();
 
             } else {
-
-                //Initialisation de fenetre pop-up
 
                 //Tirage d'un premier random
                 cursor.moveToPosition(GenRandom(0, lastDbId));
@@ -173,30 +230,41 @@ public class PlayActivity extends AppCompatActivity {
 
             }
 
-            textReponse1.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
-            textReponse2.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
-            textReponse3.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
-            textReponse4.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
-
+            //Remise à la couleur par defaut des couleurs des réponses
+            resetColorAnswer();
 
             //Actualisation du nom du joueur actuel
+
             textCurrentPlayer.setText(saveNames.get(joueurActuel-1));
 
-            joueurActuel = joueurActuel == nbJoueur ? 1 : joueurActuel++;
+            //Actualisation du numero du joueur en jeu
+            //joueurActuel = joueurActuel == nbJoueur ? 1 : joueurActuel++;
+            if (joueurActuel==nbJoueur) {
+                joueurActuel = 1;
+            } else {
+                joueurActuel += 1;
+            }
+
+            //Reset réponse joueur
+            reponseJoueur = 0;
+            textRepJoueur.setText("Votre réponse : ");
+
+            counter = 15;
+            progressBarTimer.setMax(15);
+            progressBarTimer.setProgress(counter);
+
+
+            myCount.start();
+
+
         });
     }
 
-    /*
-    private void switchActivities() {   //Methode changement d'activite
-        Intent switchActivityIntent = new Intent(this, MainActivity.class);
-        startActivity(switchActivityIntent);
-    }
-    */
-
     public static int GenRandom(Integer min, Integer max) { //Tirage aleatoire entre la valeur min et la valeur max en argument de la methode
-        return (int)Math.floor(Math.random()*(max-min+1)+min);
+        return (int) floor(Math.random()*(max-min+1)+min);
     }
 
+    //Méthode de surbrillance des réponses du joueur
     private void highlightSelectedAnswer(TextView textView, int id) {
         textView.setOnClickListener(v -> {
             reponseJoueur = id;
@@ -206,6 +274,14 @@ public class PlayActivity extends AppCompatActivity {
             textReponse4.setTextColor(ContextCompat.getColor(PlayActivity.this, id == 4 ? R.color.purple_500 : R.color.black));
             textRepJoueur.setText("Votre réponse : " + id);
         });
+    }
+
+    //Méthode de remise à zero de la couleur des réponses
+    private void resetColorAnswer () {
+        textReponse1.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
+        textReponse2.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
+        textReponse3.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
+        textReponse4.setTextColor(ContextCompat.getColor(PlayActivity.this, R.color.black));
     }
 
 }
